@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307', // 使用 Haiku 模型，速度极快且支持视觉，黑客松首选
+        model: 'claude-haiku-4-5-20251001', // 使用 Haiku 模型，速度极快且支持视觉，黑客松首选
         max_tokens: 1500,
         messages: [
           {
