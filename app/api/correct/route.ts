@@ -104,8 +104,6 @@ export async function POST(request: Request) {
     
     const cleanJsonString = rawText.substring(firstBrace, lastBrace + 1)
         // 双重保险：强制把所有真实的物理回车符替换为可见的转义符，防止 JSON 解析崩溃
-        .replace(/\n/g, '\\n')
-        .replace(/\r/g, '\\r');
 
     // 由于我们强制替换了所有回车，可能会导致结构上的换行也变成了 \n，
     // 所以保险起见，我们允许 JSON parse 能够处理这些转义。
