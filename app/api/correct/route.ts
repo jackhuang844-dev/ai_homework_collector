@@ -1,10 +1,11 @@
 import { NextResponse } from 'next/server';
-export const maxDuration = 60;
+
+// 突破 Vercel 10秒限制
+export const maxDuration = 60; 
+
 export async function POST(request: Request) {
   try {
     const { image, mimeType } = await request.json();
-
-    // 从 Vercel 环境变量中读取你的 API Key
     const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY;
 
     if (!CLAUDE_API_KEY) {
@@ -58,7 +59,6 @@ export async function POST(request: Request) {
   }
 }`;
 
-    // 向 Claude 发起请求
     const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -67,8 +67,8 @@ export async function POST(request: Request) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-      model: 'claude-opus-4-7',
-        max_tokens: 1500,
+        model: 'claude-opus-4-7',
+        max_tokens: 4000, // 👈 关键修复：字数上限放宽到 4000！
         messages: [
           {
             role: 'user',
@@ -90,16 +90,20 @@ export async function POST(request: Request) {
     const aiData = await anthropicRes.json();
     const rawText = aiData.content[0].text;
     
-    // 暴力提取：只找第一个 { 和最后一个 } 之间的内容
-const firstBrace = rawText.indexOf('{');
-const lastBrace = rawText.lastIndexOf('}');
+    // 👈 关键修复：加装监控摄像头！把原话打在日志里
+    console.log("========== AI 原始回复内容 ==========");
+    console.log(rawText);
+    console.log("=====================================");
 
-if (firstBrace === -1 || lastBrace === -1) {
-    throw new Error("AI没有返回正确的格式");
-}
-
-const cleanJsonString = rawText.substring(firstBrace, lastBrace + 1);
-const resultJson = JSON.parse(cleanJsonString);
+    const firstBrace = rawText.indexOf('{');
+    const lastBrace = rawText.lastIndexOf('}');
+    
+    if (firstBrace === -1 || lastBrace === -1) {
+        throw new Error("AI没有返回包含 {} 的数据");
+    }
+    
+    const cleanJsonString = rawText.substring(firstBrace, lastBrace + 1);
+    const resultJson = JSON.parse(cleanJsonString);
 
     return NextResponse.json(resultJson);
 
