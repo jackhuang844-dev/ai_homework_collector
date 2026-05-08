@@ -90,9 +90,16 @@ export async function POST(request: Request) {
     const aiData = await anthropicRes.json();
     const rawText = aiData.content[0].text;
     
-    // 清理可能的 Markdown 尾巴，确保是纯 JSON
-    const cleanJsonString = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-    const resultJson = JSON.parse(cleanJsonString);
+    // 暴力提取：只找第一个 { 和最后一个 } 之间的内容
+const firstBrace = rawText.indexOf('{');
+const lastBrace = rawText.lastIndexOf('}');
+
+if (firstBrace === -1 || lastBrace === -1) {
+    throw new Error("AI没有返回正确的格式");
+}
+
+const cleanJsonString = rawText.substring(firstBrace, lastBrace + 1);
+const resultJson = JSON.parse(cleanJsonString);
 
     return NextResponse.json(resultJson);
 
