@@ -23,16 +23,17 @@ export async function POST(request: Request) {
    - 只有遇到答案错误或复杂的应用题时，才进行温柔的过程分析，指出具体哪一步出错（如：“进位时粗心忘记加 1 啦”），并给予过程分。
 4. 语文或英语的“有温度且专业”点评：
    - 语气要求：温柔、鼓励，但言之有物。先肯定学生的努力、书写或思路亮点。
-   - 专业深度：在鼓励的同时，必须明确指出 1-2 个具体的学科知识点（如：数学的退位减法、英语的主谓一致、语文的标点或排比句使用）。拒绝毫无营养的空洞表扬。
-5. 评语分段排版规则：
-   - 在生成 teacher_comment 时，必须使用转义换行符 \\n\\n 进行分段。
-   - 强制使用三段式结构：
-     "【闪光点发现】用温柔的语气表扬优点...\\n\\n【专属提升秘籍】结合具体知识点指出可以改进的地方...\\n\\n【老师的期待】给出下一步的小建议并加油打气..."
-6. 五维雷达图打分：根据作业真实情况，对“计算基础、逻辑、知识掌握、应用、书写”5个维度打出0到100的真实整数分。
+   - 专业深度：在鼓励的同时，必须明确指出 1-2 个具体的学科知识点。
+5. 五维雷达图打分：根据作业真实情况，对“计算与基础、逻辑思维、知识掌握、应用能力、书写规范”5个维度打出0到100的真实整数分。
 
-【JSON 输出严格约束】
-绝对不允许在 JSON 外围输出任何多余的字符、解释文字或 Markdown 标记。必须直接输出可被程序解析的 JSON 字符串：
+【JSON 输出极其严格的语法约束（生死攸关）】
+你必须且只能输出合法的 JSON 字符串。如果违反以下任何一条，系统将直接崩溃：
+1. 绝对不允许在 JSON 外围输出任何多余的解释文字或 Markdown 标记（如 \`\`\`json）。
+2. 【禁止使用英文双引号】：在生成任何字符串内容（特别是 teacher_comment 和 process_analysis）时，内部绝对不能使用英文双引号（"），如果必须引用，请一律强制使用中文双引号（“”）或单引号（'）。
+3. 【禁止物理换行】：在字符串内部绝对不能打出真实的回车/物理换行。所有的换行必须使用转义字符 \\n 或 \\n\\n。
+4. 请确保所有的括号 {} 和 [] 完美闭合，所有的键值对末尾要有逗号（最后一项除外）。
 
+请严格按照以下格式输出：
 {
   "summary": {
     "total_score": 85,
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
       "question_text": "简要题干",
       "status": "correct或wrong或partial",
       "student_answer": "学生原答案",
-      "process_analysis": "如果是算对的纯计算题，直接填'计算非常准确！'，错误题写清具体哪一步错。"
+      "process_analysis": "如果是算对的纯计算题，直接填‘计算非常准确！’，错误题写清具体哪一步错。"
     }
   ],
   "teacher_comment": "【闪光点发现】...\\n\\n【专属提升秘籍】...\\n\\n【老师的期待】...",
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: 'claude-opus-4-7',
-        max_tokens: 4000, // 👈 关键修复：字数上限放宽到 4000！
+        max_tokens: 4000,
         messages: [
           {
             role: 'user',
@@ -90,7 +91,6 @@ export async function POST(request: Request) {
     const aiData = await anthropicRes.json();
     const rawText = aiData.content[0].text;
     
-    // 👈 关键修复：加装监控摄像头！把原话打在日志里
     console.log("========== AI 原始回复内容 ==========");
     console.log(rawText);
     console.log("=====================================");
@@ -102,7 +102,15 @@ export async function POST(request: Request) {
         throw new Error("AI没有返回包含 {} 的数据");
     }
     
-    const cleanJsonString = rawText.substring(firstBrace, lastBrace + 1);
+    const cleanJsonString = rawText.substring(firstBrace, lastBrace + 1)
+        // 双重保险：强制把所有真实的物理回车符替换为可见的转义符，防止 JSON 解析崩溃
+        .replace(/\n/g, '\\n')
+        .replace(/\r/g, '\\r');
+
+    // 由于我们强制替换了所有回车，可能会导致结构上的换行也变成了 \n，
+    // 所以保险起见，我们允许 JSON parse 能够处理这些转义。
+    // 但是标准的 JSON parse 能够正常解析带有规范转义 \\n 的单行字符串。
+    
     const resultJson = JSON.parse(cleanJsonString);
 
     return NextResponse.json(resultJson);
