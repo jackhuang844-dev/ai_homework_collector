@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
+// 👈 新增引入路由模块
+import { useRouter } from 'next/navigation';
 
 interface WeakPointStats {
   label: string;
@@ -11,6 +13,7 @@ interface WeakPointStats {
 }
 
 export default function Dashboard() {
+  const router = useRouter(); // 👈 实例化路由
   const [history, setHistory] = useState<any[]>([]);
   const [weakPoints, setWeakPoints] = useState<WeakPointStats[]>([]);
   const [metrics, setMetrics] = useState({
@@ -28,7 +31,6 @@ export default function Dashboard() {
         setHistory(parsedHistory);
         
         if (parsedHistory.length > 0) {
-          // 1. 计算核心指标
           const totalScore = parsedHistory.reduce((acc: number, curr: any) => acc + curr.score, 0);
           const maxScore = Math.max(...parsedHistory.map((h: any) => h.score));
           const totalCost = parsedHistory.reduce((acc: number, curr: any) => acc + (parseFloat(curr.cost) || 0), 0);
@@ -40,17 +42,14 @@ export default function Dashboard() {
             totalCost: totalCost
           });
 
-          // 2. 动态聚合：高频薄弱知识点提取
           const pointsTally: Record<string, number> = {};
           parsedHistory.forEach((item: any) => {
-            // 兼容旧数据，如果没有 weak_points 就给个空数组
             const points = item.data?.summary?.weak_points || [];
             points.forEach((pt: string) => {
               pointsTally[pt] = (pointsTally[pt] || 0) + 1;
             });
           });
 
-          // 将统计结果转换为数组，并按频率降序排列
           const colors = [
             'from-red-600 to-red-400',
             'from-amber-600 to-amber-400',
@@ -62,12 +61,11 @@ export default function Dashboard() {
             .map(([label, count], index) => ({
               label,
               count,
-              // 计算在多少份作业中出现了这个错误（错误率）
               rate: Math.min(100, Math.round((count / parsedHistory.length) * 100)),
               color: colors[index % colors.length]
             }))
             .sort((a, b) => b.count - a.count)
-            .slice(0, 4); // 只取频率最高的 Top 4
+            .slice(0, 4); 
 
           setWeakPoints(aggregatedPoints);
         }
@@ -76,6 +74,14 @@ export default function Dashboard() {
       }
     }
   }, []);
+
+  // 👈 新增：核心“时光机”触发器
+  const handleViewHistory = (id: number) => {
+    // 写入目标作业 ID
+    sessionStorage.setItem('view_history_id', id.toString());
+    // 立刻穿梭回工作台
+    router.push('/');
+  };
 
   return (
     <div className="min-h-screen bg-[#020617] font-sans text-gray-100 flex flex-col">
@@ -98,8 +104,6 @@ export default function Dashboard() {
       </header>
 
       <main className="flex-grow p-8 max-w-[1600px] w-full mx-auto space-y-8">
-        
-        {/* 顶部核心指标卡片 (保持不变) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-[#0f172a] border border-gray-800 rounded-2xl p-6 shadow-lg relative overflow-hidden">
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-[#38bdf8] rounded-full blur-[50px] opacity-20"></div>
@@ -133,10 +137,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* 核心看板区 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          
-          {/* 左侧：动态渲染的高频薄弱知识点 */}
           <div className="col-span-2 bg-[#0f172a] border border-gray-800 rounded-2xl p-8 shadow-lg flex flex-col">
             <div className="flex justify-between items-center mb-8">
               <h2 className="text-xl font-bold text-white flex items-center gap-3">
@@ -182,21 +183,29 @@ export default function Dashboard() {
             )}
           </div>
 
-          {/* 右侧：近期作业流 (保持不变) */}
           <div className="bg-[#0f172a] border border-gray-800 rounded-2xl p-8 shadow-lg flex flex-col max-h-[500px]">
             <h2 className="text-xl font-bold text-white mb-6">批阅流水线记录</h2>
             <div className="flex-grow overflow-y-auto pr-2 custom-scrollbar space-y-3">
               {history.length > 0 ? history.map((item, idx) => (
-                <div key={idx} className="bg-gray-900/50 border border-gray-800 p-4 rounded-xl flex justify-between items-center hover:bg-gray-800 transition-colors cursor-pointer">
+                // 👈 核心修改：给历史记录卡片绑定 onClick 事件
+                <div 
+                  key={idx} 
+                  onClick={() => handleViewHistory(item.id)}
+                  className="bg-gray-900/50 border border-gray-800 p-4 rounded-xl flex justify-between items-center hover:bg-gray-800 transition-colors cursor-pointer group"
+                  title="点击回溯此份作业"
+                >
                   <div>
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-white font-bold text-lg">{item.score} <span className="text-xs font-normal text-gray-500">分</span></span>
+                      <span className="text-white font-bold text-lg group-hover:text-[#38bdf8] transition-colors">{item.score} <span className="text-xs font-normal text-gray-500">分</span></span>
                       {item.score < 60 && <span className="bg-red-500/20 text-red-400 text-[10px] px-2 py-0.5 rounded border border-red-900/50">重点关注</span>}
                     </div>
                     <p className="text-xs text-gray-500">{item.date}</p>
                   </div>
-                  <div className="text-xs text-gray-400 bg-gray-950 px-2 py-1 rounded-md border border-gray-800 font-mono">
-                    ${parseFloat(item.cost).toFixed(4)}
+                  <div className="flex items-center gap-3">
+                    <div className="text-xs text-gray-400 bg-gray-950 px-2 py-1 rounded-md border border-gray-800 font-mono">
+                      ${parseFloat(item.cost).toFixed(4)}
+                    </div>
+                    <span className="text-gray-600 group-hover:text-[#38bdf8] transition-colors">▶</span>
                   </div>
                 </div>
               )) : (
