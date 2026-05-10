@@ -9,30 +9,41 @@ interface GradingHUDProps {
 
 export function GradingHUD({ result, activeHotspot }: GradingHUDProps) {
   return (
-    <section className="flex-[1] flex flex-col gap-6 w-full max-w-md">
+    // 👈 锁1：外层添加 h-full min-h-0，强制面板不能撑爆屏幕高度
+    <section className="flex-[1] flex flex-col gap-6 w-full max-w-md h-full min-h-0">
+      
       {/* 分数与账单看板 */}
-      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] border border-gray-700 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
+      {/* 👈 锁2：添加 flex-shrink-0，防止评语太多时，把上方的计费信息挤压变形 */}
+      <div className="bg-gradient-to-br from-[#0f172a] to-[#1e293b] border border-gray-700 rounded-2xl p-6 shadow-2xl relative overflow-hidden flex-shrink-0">
         <div className="absolute top-0 right-0 w-32 h-32 bg-[#005CB9] rounded-full blur-[80px] opacity-40"></div>
         <h2 className="text-gray-400 font-medium mb-1 tracking-wider text-sm uppercase">总评得分</h2>
         <div className="flex items-end gap-2 mb-4">
-          <span className="text-6xl font-black text-white">{result?.summary?.total_score || '-'}</span>
+          <span className="text-6xl font-black text-white font-['Urbanist']">{result?.summary?.total_score || '-'}</span>
           <span className="text-xl text-gray-500 mb-1">/100</span>
         </div>
         
         {result?.billing && (
-          <div className="bg-black/40 rounded-lg p-3 text-xs font-mono text-gray-400 border border-gray-800">
-            <div className="flex justify-between mb-1"><span>消耗算力:</span> <span className="text-[#38bdf8]">{result.billing.inputTokens} In / {result.billing.outputTokens} Out</span></div>
-            <div className="flex justify-between"><span>预估成本:</span> <span className="text-emerald-400">${result.billing.costUsd}</span></div>
+          <div className="bg-black/40 rounded-lg p-3 text-xs font-mono text-gray-400 border border-gray-800 overflow-hidden">
+            <div className="flex justify-between mb-1">
+              <span>消耗算力:</span> 
+              <span className="text-[#38bdf8] truncate ml-2">{result.billing.inputTokens} In / {result.billing.outputTokens} Out</span>
+            </div>
+            <div className="flex justify-between">
+              <span>预估成本:</span> 
+              <span className="text-emerald-400">${result.billing.costUsd}</span>
+            </div>
           </div>
         )}
       </div>
 
       {/* 动态 HUD 反馈区 */}
-      <div className="flex-grow bg-[#0f172a] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col relative">
-        <div className="h-12 bg-gray-900/50 border-b border-gray-800 flex items-center px-4">
+      {/* 👈 锁3：给动态反馈区添加 min-h-0，彻底激活内部的 overflow-y-auto 滚动条 */}
+      <div className="flex-grow bg-[#0f172a] border border-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col relative min-h-0">
+        <div className="h-12 bg-gray-900/50 border-b border-gray-800 flex items-center px-4 flex-shrink-0">
           <span className="text-sm font-bold text-gray-300">🔍 HUD 智能透视镜</span>
         </div>
         
+        {/* 这个区域现在可以完美滚动了！ */}
         <div className="p-6 overflow-y-auto flex-grow custom-scrollbar">
           {activeHotspot ? (
             <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
@@ -71,7 +82,7 @@ export function GradingHUD({ result, activeHotspot }: GradingHUDProps) {
             </div>
           ) : (
             <div className="h-full flex flex-col items-center justify-center text-gray-600">
-              <span className="text-4xl mb-3 opacity-20">📡</span>
+              <p className="text-4xl mb-3 opacity-20">📡</p>
               <p className="text-sm">雷达静默中</p>
             </div>
           )}
