@@ -2,7 +2,12 @@
 
 import React, { useState, useEffect } from 'react';
 
-interface UploadedImage { data: string; mimeType: string; preview: string; }
+// 定义图片类型
+interface UploadedImage {
+  data: string;
+  mimeType: string;
+  preview: string;
+}
 
 export default function Home() {
   const [selectedImages, setSelectedImages] = useState<UploadedImage[]>([]);
@@ -21,10 +26,13 @@ export default function Home() {
   // 初始化读取本地缓存
   useEffect(() => {
     const savedHistory = localStorage.getItem('ai_homework_history');
-    if (savedHistory) try { setHistory(JSON.parse(savedHistory)); } catch (e) {}
-    
+    if (savedHistory) {
+      try { setHistory(JSON.parse(savedHistory)); } catch (e) {}
+    }
     const savedSettings = localStorage.getItem('ai_settings');
-    if (savedSettings) try { setSettings(JSON.parse(savedSettings)); } catch (e) {}
+    if (savedSettings) {
+      try { setSettings(JSON.parse(savedSettings)); } catch (e) {}
+    }
   }, []);
 
   const saveSettings = (newSettings: any) => {
@@ -32,13 +40,12 @@ export default function Home() {
     localStorage.setItem('ai_settings', JSON.stringify(newSettings));
   };
 
-// 👈 核心升级：带有前端智能压缩功能的多图上传
+  // 带有前端 Canvas 智能压缩功能的多图上传
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
-    // 提示用户正在处理图片
-    setIsLoading(true); 
+    setIsLoading(true); // 提示正在处理图片压缩
 
     const newImages = await Promise.all(files.map(file => {
       return new Promise<UploadedImage>((resolve) => {
@@ -46,13 +53,10 @@ export default function Home() {
         reader.onload = (event) => {
           const img = new Image();
           img.onload = () => {
-            // 创建一个虚拟画布用来压缩图片
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
-            
-            // 设定最大边长（1500像素足够大模型清晰识别手写字，同时体积不到原图的十分之一）
-            const MAX_DIMENSION = 1500; 
+            const MAX_DIMENSION = 1500; // 限制最大边长，完美绕过 Vercel 4.5MB 限制
 
             if (width > height && width > MAX_DIMENSION) {
               height *= MAX_DIMENSION / width;
@@ -67,7 +71,7 @@ export default function Home() {
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(img, 0, 0, width, height);
 
-            // 强制转换为 JPEG 格式，画质压缩到 70% (0.7)
+            // 压缩为 jpeg，画质 0.7
             const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
             const data = compressedDataUrl.split(',')[1];
             
@@ -84,15 +88,17 @@ export default function Home() {
     }));
     
     setSelectedImages(prev => [...prev, ...newImages]);
-    setIsLoading(false); // 压缩完毕
+    setIsLoading(false);
     setResult(null);
   };
 
-  const removeImage = (index: number) => setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  const removeImage = (index: number) => {
+    setSelectedImages(prev => prev.filter((_, i) => i !== index));
+  };
 
   const startCorrection = async () => {
     if (!settings.apiKey) {
-      alert('请先点击右上角【设置】填写您的 API Key！');
+      alert('请先点击右上角【模型设置】填写您的 API Key！');
       setShowSettings(true);
       return;
     }
@@ -106,6 +112,7 @@ export default function Home() {
 
     try {
       const payloadImages = selectedImages.map(img => ({ data: img.data, mimeType: img.mimeType }));
+      
       const response = await fetch('/api/correct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -140,9 +147,13 @@ export default function Home() {
     }
   };
 
+  const viewHistory = (historyItem: any) => {
+    setResult(historyItem.data);
+    setSelectedImages([]); // 查看历史时不显示当前选中的图片
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
-      {/* 顶部导航 */}
       <header className="bg-white shadow-sm border-b border-gray-100 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -158,10 +169,10 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 设置弹窗 (BYOK 控制台) */}
+      {/* BYOK 设置弹窗 */}
       {showSettings && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl animate-in fade-in zoom-in-95 duration-200">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-bold">后台引擎设置</h3>
               <button onClick={() => setShowSettings(false)} className="text-gray-400 hover:text-gray-600 text-2xl">&times;</button>
@@ -207,7 +218,7 @@ export default function Home() {
                   value={settings.apiKey}
                   onChange={(e) => saveSettings({...settings, apiKey: e.target.value})}
                 />
-                <p className="text-xs text-gray-400 mt-2">密钥仅保存在您的浏览器本地，绝不上传第三方数据库。</p>
+                <p className="text-xs text-gray-400 mt-2">密钥仅保存在您的浏览器本地，绝不上传至任何数据库。</p>
               </div>
 
               <button 
@@ -221,7 +232,6 @@ export default function Home() {
         </div>
       )}
 
-      {/* 主体内容区（上传、预览、批改展示等与之前保持一致，在此省略冗余，保留关键展示逻辑） */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex flex-col md:flex-row gap-8">
         
         {/* 左侧上传区 */}
@@ -231,10 +241,11 @@ export default function Home() {
               <h2 className="text-lg font-semibold">提交作业 (支持多页)</h2>
               <span className="text-sm text-gray-400">已选 {selectedImages.length} 张</span>
             </div>
+            
             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-xl cursor-pointer bg-gray-50 hover:bg-blue-50 hover:border-blue-400 transition-all">
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                 <svg className="w-8 h-8 mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 4v16m8-8H4"></path></svg>
-                <p className="text-sm text-gray-500"><span className="font-semibold">点击添加图片</span></p>
+                <p className="text-sm text-gray-500"><span className="font-semibold">点击添加图片</span> (支持多选且自动压缩)</p>
               </div>
               <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
             </label>
@@ -245,78 +256,116 @@ export default function Home() {
                   {selectedImages.map((img, index) => (
                     <div key={index} className="relative group rounded-lg overflow-hidden border border-gray-200 shadow-sm aspect-[3/4]">
                       <img src={img.preview} alt={`作业 ${index + 1}`} className="w-full h-full object-cover" />
-                      <button onClick={() => removeImage(index)} className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-80 hover:opacity-100">✕</button>
+                      <button 
+                        onClick={() => removeImage(index)}
+                        className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 opacity-80 hover:opacity-100 transition-opacity"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                      </button>
+                      <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 text-center truncate">第 {index + 1} 页</div>
                     </div>
                   ))}
                 </div>
-                <button onClick={startCorrection} disabled={isLoading} className={`w-full py-4 rounded-xl font-medium text-white transition-all text-lg shadow-md ${isLoading ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'}`}>
+                
+                <button 
+                  onClick={startCorrection}
+                  disabled={isLoading}
+                  className={`w-full py-4 rounded-xl font-medium text-white transition-all text-lg shadow-md
+                    ${isLoading ? 'bg-blue-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 hover:shadow-lg active:scale-[0.98]'}`}
+                >
                   {isLoading ? 'AI 正在深度阅卷中...' : `开始批改 (${selectedImages.length}张)`}
                 </button>
               </div>
             )}
           </div>
+
+          {/* 本地历史记录 */}
+          {history.length > 0 && (
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+              <h2 className="text-lg font-semibold mb-4 text-gray-700">批改历史 (本地存储)</h2>
+              <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                {history.map((item) => (
+                  <button 
+                    key={item.id} 
+                    onClick={() => viewHistory(item)}
+                    className="flex-shrink-0 bg-gray-50 border border-gray-200 hover:border-blue-400 p-3 rounded-xl text-left transition-colors min-w-[140px]"
+                  >
+                    <div className="flex justify-between items-start">
+                      <div className="text-2xl font-bold text-blue-600 mb-1">{item.score} <span className="text-sm font-normal text-gray-500">分</span></div>
+                      {item.cost > 0 && <span className="text-[10px] text-amber-500 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">${item.cost}</span>}
+                    </div>
+                    <div className="text-xs text-gray-400">{item.date.split(' ')[0]}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* 右侧展示区 */}
         <section className="flex-1 lg:max-w-xl flex flex-col gap-6">
+          
           {isLoading && (
-            <div className="bg-white h-full min-h-[500px] rounded-2xl flex flex-col items-center justify-center p-8">
-               <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-6"></div>
-               <h3 className="text-xl font-semibold">专家正在阅卷</h3>
+            <div className="bg-white h-full min-h-[500px] rounded-2xl shadow-sm border border-gray-100 flex flex-col items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-16 w-16 border-t-4 border-b-4 border-blue-600 mb-6"></div>
+              <h3 className="text-xl font-semibold text-gray-700 mb-2">专家正在阅卷</h3>
+              <p className="text-gray-400 text-center animate-pulse">正在提取核心知识点，生成综合评估报告...</p>
             </div>
           )}
 
           {!isLoading && result && (
-            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+              
+              {/* 分数头部 */}
               <div className="bg-gradient-to-br from-blue-600 to-blue-800 p-8 text-white relative">
                 
-                {/* 👈 这里展示实时的账单消耗！ */}
+                {/* 实时账单 */}
                 {result.billing && (
-                   <div className="absolute top-4 right-4 bg-black/30 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-mono border border-white/20 flex items-center gap-2">
-                     <span className="text-green-300">Tokens: {result.billing.inputTokens}+{result.billing.outputTokens}</span>
-                     <span className="text-amber-300 font-bold border-l border-white/20 pl-2">💰 ${result.billing.costUsd}</span>
+                   <div className="absolute top-4 right-4 bg-black/30 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs font-mono border border-white/20 flex items-center gap-2 shadow-sm">
+                     <span className="text-green-300 opacity-90">Tokens: {result.billing.inputTokens}+{result.billing.outputTokens}</span>
+                     <span className="text-amber-300 font-bold border-l border-white/30 pl-2">💰 ${result.billing.costUsd}</span>
                    </div>
                 )}
 
-                <div>
+                <div className="mt-2">
                   <h2 className="text-3xl font-bold mb-1">综合批改报告</h2>
                   <p className="text-blue-100 opacity-90">共发现 {result.summary?.total_detected_questions || 0} 题 | 答对 {result.summary?.correct_count || 0} 题</p>
                 </div>
-                <div className="mt-4 text-left bg-white/20 rounded-2xl p-4 inline-block border border-white/30">
-                  <span className="text-4xl font-extrabold mr-2">{result.summary?.total_score || 0}</span>
-                  <span className="text-sm opacity-90">分</span>
+                <div className="mt-5 text-left bg-white/20 backdrop-blur-md rounded-2xl p-4 inline-block border border-white/30 shadow-inner">
+                  <span className="text-5xl font-extrabold mr-2 tracking-tight">{result.summary?.total_score || 0}</span>
+                  <span className="text-sm opacity-90 font-medium">分 / 100</span>
                 </div>
               </div>
 
-              {/* 评语展示区（同上） */}
               <div className="p-6 space-y-8">
-            {/* 三段式名师定制评语 - 智能高亮渲染版 */}
+                
+                {/* 智能排版的三段式评语卡片 */}
                 {result.teacher_comment && (
-                  <div className="mt-8">
+                  <div>
                     <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
                       <span className="bg-amber-100 text-amber-600 p-1.5 rounded-lg text-sm">💡</span> 
                       名师综合诊断
                     </h3>
                     <div className="space-y-4">
-                      {/* 放弃依赖 \n，直接用正则表达式按 【 强行切分段落 */}
-                      {result.teacher_comment.split(/(?=【)/).filter((para: string) => para.trim()).map((para: string, idx: number) => {
+                      {result.teacher_comment
+                        .split(/(?=【(?:闪光|专属|提升|老师|期待|名师).*?】)/)
+                        .filter((para: string) => para.trim())
+                        .map((para: string, idx: number) => {
                         let cleanPara = para.replace(/\\n/g, '\n').trim();
                         let title = '';
                         let content = cleanPara;
                         
-                        // 提取括号里的标题和后面的正文
                         const match = cleanPara.match(/^(【[^】]+】)([\s\S]*)/);
                         if (match) {
-                          title = match[1].replace(/【|】/g, ''); // 去掉括号
+                          title = match[1].replace(/【|】/g, ''); 
                           content = match[2].trim();
                         }
 
-                        // 根据标题关键词，智能分配卡片颜色和图标
                         let bgColor = "bg-gray-50 border border-gray-100";
                         let titleColor = "text-gray-800";
                         let icon = "📌";
                         
-                        if (title.includes('闪光') || title.includes('优点') || title.includes('点赞')) {
+                        if (title.includes('闪光') || title.includes('优点')) {
                           bgColor = "bg-green-50/70 border border-green-200";
                           titleColor = "text-green-800";
                           icon = "✨";
@@ -331,22 +380,55 @@ export default function Home() {
                         }
 
                         return (
-                          <div key={idx} className={`p-5 rounded-xl shadow-sm transition-all hover:shadow-md ${bgColor}`}>
+                          <div key={idx} className={`p-6 rounded-xl shadow-sm transition-all hover:shadow-md ${bgColor}`}>
                              {title && (
-                               <h4 className={`font-bold mb-3 flex items-center gap-2 text-lg ${titleColor}`}>
+                               <h4 className={`font-bold mb-4 flex items-center gap-2 text-lg border-b pb-2 border-current opacity-80 ${titleColor}`}>
                                  <span>{icon}</span> {title}
                                </h4>
                              )}
-                             <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-justify">
+                             <div className="text-gray-700 leading-relaxed whitespace-pre-wrap text-justify">
                                {content}
-                             </p>
+                             </div>
                           </div>
                         );
                       })}
                     </div>
                   </div>
                 )}
+
+                {/* 错题细节追踪 */}
+                {result.correction_details && result.correction_details.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <span className="bg-red-100 text-red-500 p-1.5 rounded-lg text-sm">📝</span> 细节追踪
+                    </h3>
+                    <div className="space-y-3 max-h-80 overflow-y-auto pr-2 custom-scrollbar">
+                      {result.correction_details.map((q: any, i: number) => (
+                        <div key={i} className={`p-4 rounded-xl border ${q.status === 'wrong' ? 'bg-red-50/50 border-red-100' : (q.status === 'partial' ? 'bg-amber-50/50 border-amber-100' : 'bg-green-50/50 border-green-100')}`}>
+                           <div className="flex justify-between mb-2 items-center">
+                             <span className="font-medium text-gray-800 bg-white px-2 py-1 rounded shadow-sm text-sm">题目 {q.id || i+1}</span>
+                             <span className={`text-sm font-bold px-2 py-1 rounded-full ${q.status === 'wrong' ? 'bg-red-100 text-red-600' : (q.status === 'partial' ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-700')}`}>
+                               {q.status === 'wrong' ? '❌ 错误' : (q.status === 'partial' ? '⚠️ 部分正确' : '✅ 正确')}
+                             </span>
+                           </div>
+                           <p className="text-sm text-gray-600 mt-3 leading-relaxed bg-white/50 p-3 rounded-lg"><span className="font-semibold text-gray-700">解析指引：</span>{q.process_analysis}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
               </div>
+            </div>
+          )}
+
+          {!isLoading && !result && (
+            <div className="bg-white h-full min-h-[400px] rounded-2xl shadow-sm border border-gray-100 border-dashed flex flex-col items-center justify-center p-8 text-gray-400 transition-all hover:bg-gray-50">
+              <div className="bg-gray-100 p-4 rounded-full mb-4">
+                <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+              </div>
+              <p className="font-medium text-gray-500">等待提交作业...</p>
+              <p className="text-sm mt-2 text-gray-400 max-w-xs text-center leading-relaxed">支持一次性上传多页试卷，系统将自动压缩图像并进行全局综合批改</p>
             </div>
           )}
         </section>
