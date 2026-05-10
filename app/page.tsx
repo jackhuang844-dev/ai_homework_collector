@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
 import Link from 'next/link';
 import { AISettings, UploadedImage, GradingResult, CorrectionDetail } from '@/types';
 import { processAndCompressImages } from '@/lib/image-processor';
@@ -14,18 +14,34 @@ export default function Home() {
   const [activeHotspot, setActiveHotspot] = useState<CorrectionDetail | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [settings, setSettings] = useState<AISettings>({ provider: 'anthropic', model: 'claude-opus-4-7', apiKey: '' });
-  
-  // 👈 新增：历史记录状态
   const [history, setHistory] = useState<any[]>([]);
 
   useEffect(() => {
-    // 读取设置
+    // 1. 读取基础配置和历史数据库
     const savedSettings = localStorage.getItem('ai_settings');
     if (savedSettings) try { setSettings(JSON.parse(savedSettings)); } catch(e){}
 
-    // 👈 新增：初始化时读取历史记录
     const savedHistory = localStorage.getItem('ai_homework_history');
-    if (savedHistory) try { setHistory(JSON.parse(savedHistory)); } catch(e){}
+    let parsedHistory: any[] = [];
+    if (savedHistory) {
+      try { 
+        parsedHistory = JSON.parse(savedHistory);
+        setHistory(parsedHistory); 
+      } catch(e){}
+    }
+
+    // 2. 👈 时光机验票核心逻辑：检查是否是从 Dashboard 跳转回来的
+    const restoreId = sessionStorage.getItem('view_history_id');
+    if (restoreId && parsedHistory.length > 0) {
+      const historyItem = parsedHistory.find((h: any) => h.id.toString() === restoreId);
+      if (historyItem) {
+        // 瞬间还原现场！
+        if (historyItem.images) setSelectedImages(historyItem.images);
+        if (historyItem.data) setResult(historyItem.data);
+      }
+      // 撕毁车票，防止下次刷新又加载
+      sessionStorage.removeItem('view_history_id');
+    }
   }, []);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,14 +50,12 @@ export default function Home() {
     
     setIsLoading(true);
     const newImages = await processAndCompressImages(files);
-    // 👈 修改：使用追加模式，支持多次上传多张图
     setSelectedImages(prev => [...prev, ...newImages]); 
     setIsLoading(false);
     setResult(null);
     setActiveHotspot(null);
   };
 
-  // 移除某张图片
   const removeImage = (index: number) => {
     setSelectedImages(prev => prev.filter((_, i) => i !== index));
   };
@@ -65,16 +79,18 @@ export default function Home() {
       
       setResult(data);
 
-      // 👈 核心修复：将新批改的结果追加保存到本地历史记录中，供 Dashboard 读取
+      // 👈 修改：时光机包裹，把 selectedImages 一起存进历史数据库
       const newHistoryItem = {
         id: Date.now(),
         date: new Date().toLocaleString(),
         score: data.summary?.total_score || 0,
         cost: data.billing?.costUsd || 0,
-        data: data 
+        data: data,
+        images: selectedImages // 将作业原图一同保存！
       };
       
-      const updatedHistory = [newHistoryItem, ...history].slice(0, 50); // 最多保留50条记录
+      // 注意：为了防止爆掉浏览器 5MB 的存储限制，保留最近的 15 份连图作业即可
+      const updatedHistory = [newHistoryItem, ...history].slice(0, 15); 
       setHistory(updatedHistory);
       localStorage.setItem('ai_homework_history', JSON.stringify(updatedHistory));
 
@@ -85,9 +101,9 @@ export default function Home() {
     }
   };
 
+  // （保留原有的 UI 渲染部分完全不变）
   return (
     <div className="min-h-screen bg-[#020617] font-sans text-gray-100 flex flex-col">
-      {/* 头部导航 */}
       <header className="bg-[#0f172a] border-b border-gray-800 shadow-xl sticky top-0 z-50">
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -105,19 +121,12 @@ export default function Home() {
         </div>
       </header>
 
-      {/* 设置弹窗组件 */}
-      {showSettings && (
-        <SettingsModal settings={settings} setSettings={setSettings} onClose={() => setShowSettings(false)} />
-      )}
+      {showSettings && <SettingsModal settings={settings} setSettings={setSettings} onClose={() => setShowSettings(false)} />}
 
-      {/* 核心工作区 */}
       <main className="flex-grow flex p-6 gap-6 max-w-[1600px] w-full mx-auto relative h-[calc(100vh-64px)] overflow-hidden">
-        
-        {/* 左侧：画卷展示区 (Visual Grounding Area) */}
         <section className="flex-[2] bg-[#0f172a] border border-gray-800 rounded-2xl flex flex-col overflow-hidden shadow-2xl">
           <div className="h-16 border-b border-gray-800 flex items-center justify-between px-6 bg-[#0f172a]/80 backdrop-blur z-10 flex-shrink-0">
             <div className="flex items-center gap-4">
-              {/* 👈 修改：确保 input 带有 multiple 属性支持多选 */}
               <label className="cursor-pointer bg-[#005CB9] hover:bg-blue-600 text-white px-5 py-2 rounded-lg font-medium text-sm shadow-lg transition-colors">
                 + 载入多页原稿
                 <input type="file" accept="image/*" multiple className="hidden" onChange={handleImageUpload} />
@@ -148,30 +157,23 @@ export default function Home() {
 
             {selectedImages.length > 0 && (
               <div className="w-full flex flex-col items-center gap-6">
-                
-                {/* 👈 新增：多图预览缩略图网格 */}
                 <div className="w-full bg-gray-900/50 p-4 rounded-xl border border-gray-800">
                   <h3 className="text-xs text-gray-500 mb-3 font-medium uppercase tracking-wider">作业序列 (共 {selectedImages.length} 页)</h3>
                   <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
                     {selectedImages.map((img, idx) => (
                       <div key={idx} className="relative flex-shrink-0 w-20 h-28 rounded-md overflow-hidden border border-gray-700 group">
                         <img src={img.preview} className="object-cover w-full h-full opacity-80 group-hover:opacity-100 transition-opacity" alt={`缩略图 ${idx+1}`} />
-                        <button 
-                          onClick={() => removeImage(idx)} 
-                          className="absolute top-1 right-1 bg-red-500/90 hover:bg-red-500 rounded-full w-5 h-5 flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow"
-                        >✕</button>
+                        <button onClick={() => removeImage(idx)} className="absolute top-1 right-1 bg-red-500/90 hover:bg-red-500 rounded-full w-5 h-5 flex items-center justify-center text-white text-xs opacity-0 group-hover:opacity-100 transition-opacity shadow">✕</button>
                         <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-[10px] text-center text-gray-300 py-0.5">P{idx+1}</div>
                       </div>
                     ))}
                   </div>
                 </div>
 
-                {/* 核心画布：目前默认在第一张图上渲染 HUD 锚点 */}
                 <div className="relative shadow-2xl rounded-lg overflow-hidden group border border-gray-800/50">
                   <div className="absolute top-2 left-2 bg-black/50 text-white text-xs px-2 py-1 rounded backdrop-blur-md z-10">HUD 映射层 - 页码 1</div>
                   <img src={selectedImages[0].preview} alt="作业原稿" className="max-w-full max-h-[60vh] object-contain block" />
                   
-                  {/* 渲染 AI 返回的空间坐标锚点 */}
                   {result?.correction_details?.map((detail, idx) => {
                     if (!detail.bounding_box) return null;
                     const [y, x, h, w] = detail.bounding_box;
@@ -207,11 +209,9 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 右侧组件：抽出为单独文件管理 */}
         <GradingHUD result={result} activeHotspot={activeHotspot} />
       </main>
       
-      {/* 滚动条美化 */}
       <style dangerouslySetInnerHTML={{__html: `
         .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
