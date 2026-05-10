@@ -252,13 +252,58 @@ export default function Home() {
 
               {/* 评语展示区（同上） */}
               <div className="p-6 space-y-8">
+            {/* 三段式名师定制评语 - 智能高亮渲染版 */}
                 {result.teacher_comment && (
-                  <div>
-                    <h3 className="text-lg font-semibold mb-4">💡 名师综合诊断</h3>
-                    <div className="space-y-3">
-                      {result.teacher_comment.split('\\n\\n').map((para: string, idx: number) => {
-                        const isTitle = para.startsWith('【');
-                        return para.trim() ? <div key={idx} className={`p-4 rounded-xl ${isTitle ? 'bg-blue-50 text-blue-900' : 'bg-gray-50'}`}>{para.replace(/\\n/g, '').trim()}</div> : null;
+                  <div className="mt-8">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                      <span className="bg-amber-100 text-amber-600 p-1.5 rounded-lg text-sm">💡</span> 
+                      名师综合诊断
+                    </h3>
+                    <div className="space-y-4">
+                      {/* 放弃依赖 \n，直接用正则表达式按 【 强行切分段落 */}
+                      {result.teacher_comment.split(/(?=【)/).filter((para: string) => para.trim()).map((para: string, idx: number) => {
+                        let cleanPara = para.replace(/\\n/g, '\n').trim();
+                        let title = '';
+                        let content = cleanPara;
+                        
+                        // 提取括号里的标题和后面的正文
+                        const match = cleanPara.match(/^(【[^】]+】)([\s\S]*)/);
+                        if (match) {
+                          title = match[1].replace(/【|】/g, ''); // 去掉括号
+                          content = match[2].trim();
+                        }
+
+                        // 根据标题关键词，智能分配卡片颜色和图标
+                        let bgColor = "bg-gray-50 border border-gray-100";
+                        let titleColor = "text-gray-800";
+                        let icon = "📌";
+                        
+                        if (title.includes('闪光') || title.includes('优点') || title.includes('点赞')) {
+                          bgColor = "bg-green-50/70 border border-green-200";
+                          titleColor = "text-green-800";
+                          icon = "✨";
+                        } else if (title.includes('提升') || title.includes('秘籍') || title.includes('不足')) {
+                          bgColor = "bg-amber-50/70 border border-amber-200";
+                          titleColor = "text-amber-800";
+                          icon = "🔍";
+                        } else if (title.includes('期待') || title.includes('建议')) {
+                          bgColor = "bg-blue-50/70 border border-blue-200";
+                          titleColor = "text-blue-800";
+                          icon = "🚀";
+                        }
+
+                        return (
+                          <div key={idx} className={`p-5 rounded-xl shadow-sm transition-all hover:shadow-md ${bgColor}`}>
+                             {title && (
+                               <h4 className={`font-bold mb-3 flex items-center gap-2 text-lg ${titleColor}`}>
+                                 <span>{icon}</span> {title}
+                               </h4>
+                             )}
+                             <p className="text-gray-700 leading-relaxed whitespace-pre-wrap text-justify">
+                               {content}
+                             </p>
+                          </div>
+                        );
                       })}
                     </div>
                   </div>
