@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AISettings, UploadedImage, GradingResult, CorrectionDetail } from '@/types';
+import Link from 'next/link';
 import { processAndCompressImages } from '@/lib/image-processor';
 import { SettingsModal } from '@/components/SettingsModal';
 import { GradingHUD } from '@/components/GradingHUD';
@@ -64,9 +65,14 @@ export default function Home() {
             <div className="bg-[#005CB9] text-white p-1.5 rounded-lg font-black text-xl leading-none">π</div>
             <h1 className="text-xl font-bold tracking-wide">希沃智教 <span className="font-light text-[#38bdf8]">Workspace</span></h1>
           </div>
-          <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-full border border-gray-700">
-            ⚙️ 生态引擎配置
-          </button>
+       <div className="flex items-center gap-3">
+  <Link href="/dashboard" className="flex items-center gap-2 text-sm bg-[#005CB9]/20 hover:bg-[#005CB9]/40 text-[#38bdf8] px-4 py-2 rounded-full border border-[#005CB9]/50 transition-colors font-medium">
+    📊 进入学情看板
+  </Link>
+  <button onClick={() => setShowSettings(true)} className="flex items-center gap-2 text-sm bg-gray-800 hover:bg-gray-700 text-gray-300 px-4 py-2 rounded-full border border-gray-700 transition-colors">
+    ⚙️ 生态配置
+  </button>
+</div>
         </div>
       </header>
 
