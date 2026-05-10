@@ -32,21 +32,59 @@ export default function Home() {
     localStorage.setItem('ai_settings', JSON.stringify(newSettings));
   };
 
+// 👈 核心升级：带有前端智能压缩功能的多图上传
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
+
+    // 提示用户正在处理图片
+    setIsLoading(true); 
+
     const newImages = await Promise.all(files.map(file => {
       return new Promise<UploadedImage>((resolve) => {
-        const previewUrl = URL.createObjectURL(file);
         const reader = new FileReader();
-        reader.onloadend = () => {
-          const data = (reader.result as string).split(',')[1];
-          resolve({ data, mimeType: file.type || 'image/jpeg', preview: previewUrl });
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            // 创建一个虚拟画布用来压缩图片
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            
+            // 设定最大边长（1500像素足够大模型清晰识别手写字，同时体积不到原图的十分之一）
+            const MAX_DIMENSION = 1500; 
+
+            if (width > height && width > MAX_DIMENSION) {
+              height *= MAX_DIMENSION / width;
+              width = MAX_DIMENSION;
+            } else if (height > MAX_DIMENSION) {
+              width *= MAX_DIMENSION / height;
+              height = MAX_DIMENSION;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx?.drawImage(img, 0, 0, width, height);
+
+            // 强制转换为 JPEG 格式，画质压缩到 70% (0.7)
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            const data = compressedDataUrl.split(',')[1];
+            
+            resolve({ 
+              data, 
+              mimeType: 'image/jpeg', 
+              preview: compressedDataUrl 
+            });
+          };
+          img.src = event.target?.result as string;
         };
         reader.readAsDataURL(file);
       });
     }));
+    
     setSelectedImages(prev => [...prev, ...newImages]);
+    setIsLoading(false); // 压缩完毕
     setResult(null);
   };
 
