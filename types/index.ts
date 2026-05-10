@@ -20,7 +20,8 @@ export interface GradingResult {
     total_score: number;
     correct_count: number;
     wrong_count: number;
-    total_detected_questions: number;
+    total_detected_questions?: number;
+    weak_points?: string[]; // 👈 新增：AI 提取的薄弱知识点标签
   };
   correction_details: CorrectionDetail[];
   teacher_comment: string;
